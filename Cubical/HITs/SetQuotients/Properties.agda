@@ -147,3 +147,22 @@ discreteSetQuotients {A = A} {R = R} Adis Rprop Req Rdec =
       J (λ b ab → ∀ k → PathP (λ i → (y : A / R) → Dec (ab i ≡ y))
                               (discreteSetQuotients' a) k)
         (λ k → funExt (λ x → isPropDec (squash/ _ _) _ _)) (eq/ a b ab) (discreteSetQuotients' b)
+
+isSetQuotientA/R : isSet (A / R)
+isSetQuotientA/R = squash/
+
+elimSetQuotientOp₁ : (f : A → A)
+                   → ((a b : A) (r : R a b) → R (f a) (f b))
+                   → A / R → A / R
+elimSetQuotientOp₁ f feq = elimSetQuotients (λ _ → squash/) (λ a → [ f a ]) (λ a b r → eq/ _ _ (feq _ _ r))
+
+elimSetQuotientOp₂ : (f : A → A → A)
+                   → ((a b c : A) (r : R a b) → R (f a c) (f b c))
+                   → ((c a b : A) (r : R a b) → R (f c a) (f c b))
+                   → A / R → A / R → A / R
+elimSetQuotientOp₂ {A = A} {R = R} f leftPath rightPath =
+  elimSetQuotients (λ _ → isSetPi (λ _ → squash/)) elimFirst elimFirstPath where
+    elimFirst : A → A / R → A / R
+    elimFirst a = elimSetQuotientOp₁ (f a) (rightPath a)
+    elimFirstPath : (a b : A) (r : R a b) → elimFirst a ≡ elimFirst b
+    elimFirstPath _ _ r = funExt (elimSetQuotientsProp (λ _ → squash/ _ _) (λ _ → eq/ _ _ (leftPath _ _ _ r)))

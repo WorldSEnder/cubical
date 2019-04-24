@@ -105,14 +105,19 @@ _+negsuc_ : Int → ℕ → Int
 z +negsuc 0 = predInt z
 z +negsuc (suc n) = predInt (z +negsuc n)
 
+infixl 6 _+_ _-_
+
 _+_ : Int → Int → Int
 m + pos n = m +pos n
 m + negsuc n = m +negsuc n
 
+-_ : Int → Int
+- pos zero = pos zero
+- pos (suc n) = negsuc n
+- negsuc n = pos (suc n)
+
 _-_ : Int → Int → Int
-m - pos zero    = m
-m - pos (suc n) = m + negsuc n
-m - negsuc n    = m + pos (suc n)
+m - n = m + (- n)
 
 sucInt+pos : ∀ n m → sucInt (m +pos n) ≡ (sucInt m) +pos n
 sucInt+pos zero m = refl
@@ -166,48 +171,102 @@ negsuc0+ (pos (suc n)) = (sym (sucPred (pos n))) ∙ (cong sucInt (negsuc0+ _))
 negsuc0+ (negsuc zero) = refl
 negsuc0+ (negsuc (suc n)) = cong predInt (negsuc0+ (negsuc n))
 
-ind-comm : {A : Type₀} (_∙_ : A → A → A) (f : ℕ → A) (g : A → A)
-           (p : ∀ {n} → f (suc n) ≡ g (f n))
-           (g∙ : ∀ a b → g (a ∙ b) ≡ g a ∙ b)
-           (∙g : ∀ a b → g (a ∙ b) ≡ a ∙ g b)
-           (base : ∀ z → z ∙ f 0 ≡ f 0 ∙ z)
-         → ∀ z n → z ∙ f n ≡ f n ∙ z
-ind-comm _∙_ f g p g∙ ∙g base z 0 = base z
-ind-comm _∙_ f g p g∙ ∙g base z (suc n) =
-  z ∙ f (suc n) ≡[ i ]⟨ z ∙ p {n} i ⟩
-  z ∙ g (f n)   ≡⟨ sym ( ∙g z (f n)) ⟩
-  g (z ∙ f n)   ≡⟨ cong g IH ⟩
-  g (f n ∙ z)   ≡⟨ g∙ (f n) z ⟩
-  g (f n) ∙ z   ≡[ i ]⟨ p {n} (~ i) ∙ z ⟩
-  f (suc n) ∙ z ∎
-  where
-  IH = ind-comm _∙_ f g p g∙ ∙g base z n
+private
+  record IndStructure : Type₁
+  record IndAssocStructure : Type₁
+  record IndCommStructure : Type₁
 
-ind-assoc : {A : Type₀} (_·_ : A → A → A) (f : ℕ → A)
-        (g : A → A) (p : ∀ a b → g (a · b) ≡ a · (g b))
-        (q : ∀ {c} → f (suc c) ≡ g (f c))
-        (base : ∀ m n → (m · n) · (f 0) ≡ m · (n · (f 0)))
-        (m n : A) (o : ℕ)
-      → m · (n · (f o)) ≡ (m · n) · (f o)
-ind-assoc _·_ f g p q base m n 0 = sym (base m n)
-ind-assoc _·_ f g p q base m n (suc o) =
-    m · (n · (f (suc o))) ≡[ i ]⟨ m · (n · q {o} i) ⟩
-    m · (n · (g (f o)))   ≡[ i ]⟨ m · (p n (f o) (~ i)) ⟩
-    m · (g (n · (f o)))   ≡⟨ sym (p m (n · (f o)))⟩
-    g (m · (n · (f o)))   ≡⟨ cong g IH ⟩
-    g ((m · n) · (f o))   ≡⟨ p (m · n) (f o) ⟩
-    (m · n) · (g (f o))   ≡[ i ]⟨ (m · n) · q {o} (~ i) ⟩
-    (m · n) · (f (suc o)) ∎
+record IndStructure where
+  infix 15 _·_
+  infixr 14 _:>_
+  infix 13 _#_
+  field
+    {A Ix} : Type₀
+    _·_ : A → A → A
+    f : ℕ → A
+    fᵢ : ℕ → Ix
+    _:>_ : A → Ix → Ix
+    _#_ : A → Ix → A
+    p : ∀ {n} → f (suc n) ≡ f n # fᵢ n
+
+record IndCommStructure where
+  field
+    ind-base : IndStructure
+  open IndStructure ind-base public
+  field
+    g∙ : ∀ n b → (f n · b) # (b :> fᵢ n) ≡ (f n # fᵢ n) · b
+    ∙g : ∀ a n → (a · f n) # (a :> fᵢ n) ≡ a · (f n # fᵢ n)
+    base : ∀ z → z · f 0 ≡ f 0 · z
+
+  ind-comm : ∀ z n → z · f n ≡ f n · z
+  ind-comm z 0 = base z
+  ind-comm z (suc n) =
+    z · f (suc n)         ≡[ i ]⟨ z · p {n} i ⟩
+    z · (f n # ix)        ≡⟨ sym (∙g z n) ⟩
+    (z · f n) # (z :> ix) ≡⟨ cong (_# (z :> ix)) IH ⟩
+    (f n · z) # (z :> ix) ≡⟨ g∙ n z ⟩
+    (f n # ix) · z        ≡[ i ]⟨ p {n} (~ i) · z ⟩
+    f (suc n) · z         ∎
     where
-    IH = ind-assoc _·_ f g p q base m n o
+    ix = fᵢ n
+    IH = ind-comm z n
+open IndCommStructure using (ind-comm) public
+
+record IndAssocStructure where
+  field
+    ind-base : IndStructure
+  open IndStructure ind-base public
+  field
+    q : ∀ a b i → a · b # a :> i ≡ a · (b # i)
+    z : ∀ i j n → i :> j :> fᵢ n ≡ i · j :> fᵢ n
+    base : ∀ m n → (m · n) · f 0 ≡ m · (n · f 0)
+
+  ind-assoc : ∀ m n o → m · (n · f o) ≡ (m · n) · f o
+  ind-assoc m n 0 = sym (base m n)
+  ind-assoc m n (suc o) =
+    m · (n · f (suc o))          ≡[ i ]⟨ m · (n · p {o} i) ⟩
+    m · (n · (f o # ix))         ≡[ i ]⟨ m · (q n (f o) ix (~ i)) ⟩
+    m · (n · f o # n :> ix)      ≡⟨ sym (q m (n · f o) _) ⟩
+    m · (n · f o) # m :> n :> ix ≡⟨ cong ((m · (n · f o)) #_) (z m n o) ⟩
+    m · (n · f o) # m · n :> ix  ≡⟨ cong (_# ((m · n) :> ix)) IH ⟩
+    (m · n) · f o # m · n :> ix  ≡⟨ q (m · n) (f o) _ ⟩
+    (m · n) · (f o # ix)         ≡[ i ]⟨ (m · n) · p {o} (~ i) ⟩
+    (m · n) · (f (suc o))        ∎
+    where
+    ix = fᵢ o
+    IH = ind-assoc m n o
+open IndAssocStructure using (ind-assoc) public
+
+private
+  record Unit : Set where constructor tt
+  +-ind-base-pos : IndStructure
+  +-ind-base-pos = record
+    { _·_ = _+_ ; f = pos ; fᵢ = λ _ → tt ; _:>_ = λ _ i → i
+    ; _#_ = λ n _ → sucInt n ; p = refl }
+  +-ind-base-negsuc : IndStructure
+  +-ind-base-negsuc = record
+    { _·_ = _+_ ; f = negsuc ; fᵢ = λ _ → tt ; _:>_ = λ _ i → i
+    ; _#_ = λ n _ → predInt n ; p = refl }
 
 +-comm : ∀ m n → m + n ≡ n + m
-+-comm m (pos n) = ind-comm _+_ pos sucInt refl sucInt+ +sucInt pos0+ m n
-+-comm m (negsuc n) = ind-comm _+_ negsuc predInt refl predInt+ +predInt negsuc0+ m n
++-comm m (pos n) = ind-comm record { ind-base = +-ind-base-pos
+                                   ; g∙ = λ n b → sucInt+ (pos n) b
+                                   ; ∙g = λ a n → +sucInt a (pos n)
+                                   ; base = pos0+ } m n
++-comm m (negsuc n) = ind-comm record { ind-base = +-ind-base-negsuc
+                                      ; g∙ = λ n b → predInt+ (negsuc n) b
+                                      ; ∙g = λ a n → +predInt a (negsuc n)
+                                      ; base = negsuc0+ } m n
 
 +-assoc : ∀ m n o → m + (n + o) ≡ (m + n) + o
-+-assoc m n (pos o) = ind-assoc _+_ pos sucInt +sucInt refl (λ _ _ → refl) m n o
-+-assoc m n (negsuc o) = ind-assoc _+_ negsuc predInt +predInt refl +predInt m n o
++-assoc m n (pos o) = ind-assoc record { ind-base = +-ind-base-pos
+                                       ; q = λ a b _ → +sucInt a b
+                                       ; z = λ _ _ _ → refl
+                                       ; base = λ _ _ → refl } m n o
++-assoc m n (negsuc o) = ind-assoc record { ind-base = +-ind-base-negsuc
+                                          ; q = λ a b _ → +predInt a b
+                                          ; z = λ _ _ _ → refl
+                                          ; base = +predInt } m n o
 
 -- Compose sucPathInt with itself n times. Transporting along this
 -- will be addition, transporting with it backwards will be subtraction.
@@ -275,3 +334,43 @@ private
                                        (λ n → n - m)
                                        (minusPlus m)
                                        (plusMinus m))
+
+minusPlusNeg : ∀ m n → m - n ≡ m + (- n)
+minusPlusNeg m n = refl
+
+neg0Minus : ∀ n → (- n) ≡ pos 0 - n
+neg0Minus (pos zero) = refl
+neg0Minus (pos (suc n)) = pos0+ _
+neg0Minus (negsuc n) =
+  pos (suc n)            ≡⟨ pos0+ _ ⟩
+  pos 0 + sucInt (pos n) ≡⟨ sym (+sucInt (pos 0) (pos n)) ⟩
+  sucInt (pos 0 + pos n) ∎
+
+neg-suc-pred : ∀ n → - (sucInt n) ≡ predInt (- n)
+neg-suc-pred (pos 0) = refl
+neg-suc-pred (pos (suc n)) = refl
+neg-suc-pred (negsuc zero) = refl
+neg-suc-pred (negsuc (suc n)) = refl
+
+neg-pred-suc : ∀ n → - (predInt n) ≡ sucInt (- n)
+neg-pred-suc n =
+  - (predInt n)                   ≡⟨ sym (sucPred _) ⟩
+  sucInt (predInt (- predInt n))  ≡⟨ cong sucInt (sym (neg-suc-pred _)) ⟩
+  sucInt (- (sucInt (predInt n))) ≡[ i ]⟨ sucInt (- sucPred n i) ⟩
+  sucInt (- n)                    ∎
+
+neg-distrib-+ : ∀ m n → - (m + n) ≡ - m - n
+neg-distrib-+ m (pos zero) = refl
+neg-distrib-+ m (pos (suc n)) =
+  - (sucInt (m + pos n))  ≡⟨ neg-suc-pred _ ⟩
+  predInt (- (m + pos n)) ≡⟨ cong predInt (neg-distrib-+ m (pos n)) ⟩
+  predInt (- m - pos n)   ≡⟨ +predInt (- m) (- pos n) ⟩
+  - m + predInt (- pos n) ≡[ i ]⟨ - m + neg-suc-pred (pos n) (~ i) ⟩
+  - m - pos (suc n)       ∎
+neg-distrib-+ m (negsuc zero) = neg-pred-suc _
+neg-distrib-+ m (negsuc (suc n)) =
+  - predInt (m + negsuc n)  ≡⟨ neg-pred-suc _ ⟩
+  sucInt (- (m + negsuc n)) ≡⟨ cong sucInt (neg-distrib-+ m (negsuc n)) ⟩
+  sucInt (- m - negsuc n)   ≡⟨ +sucInt (- m) (- negsuc n) ⟩
+  - m + sucInt (- negsuc n) ≡[ i ]⟨ - m + neg-pred-suc (negsuc n) (~ i) ⟩
+  - m - negsuc (suc n)      ∎
