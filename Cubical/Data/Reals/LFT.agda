@@ -401,15 +401,21 @@ _^-1 = elimSetQuotientOp₁ _^-1-pre-lft path where
 ^-1-inv : ∀ m → invertible₁ m → id-lft ≡ m *lft (m ^-1)
 ^-1-inv _ (Lift pre-lft hasProp) = eq/ _ _ (^-1-pre-inv pre-lft hasProp)
 
+digit2prelft : Digit → pre-LFT₁
+pre-LFT₁.a (digit2prelft digit) = Int.pos 1
+pre-LFT₁.b (digit2prelft digit) = Int.pos 0
+pre-LFT₁.c (digit2prelft +1) = Int.pos 1
+pre-LFT₁.c (digit2prelft +0) = Int.pos 0
+pre-LFT₁.c (digit2prelft −1) = Int.negsuc 0
+pre-LFT₁.d (digit2prelft digit) = Int.pos 2
+
 digit2lft : Digit → LFT₁
-digit2lft d = [ digit2prelft d ] where
-  digit2prelft : Digit → pre-LFT₁
-  pre-LFT₁.a (digit2prelft digit) = Int.pos 1
-  pre-LFT₁.b (digit2prelft digit) = Int.pos 0
-  pre-LFT₁.c (digit2prelft +1) = Int.pos 1
-  pre-LFT₁.c (digit2prelft +0) = Int.pos 0
-  pre-LFT₁.c (digit2prelft −1) = Int.negsuc 0
-  pre-LFT₁.d (digit2prelft digit) = Int.pos 2
+digit2lft d = [ digit2prelft d ]
+
+digit-bounded : ∀ d → bounded₁ (digit2lft d)
+digit-bounded +1 = Lift _ record { sq-sign-pos = refl }
+digit-bounded +0 = Lift _ record { sq-sign-pos = refl }
+digit-bounded −1 = Lift _ record { sq-sign-pos = refl }
 
 data DigitList : ℕ → Type₀ where
   [] : DigitList 0
@@ -420,8 +426,72 @@ sift [] lft = lft
 sift (d ∷ ds) lft = sift ds (lft *lft digit2lft d)
 
 open import Cubical.Data.Prod
-fundamental-theorem : ∀ m → refining₁ m
-                    → Σ[ n ∈ ℕ ]
-                    ∀ (ds : DigitList n)
-                    → Σ[ e ∈ Digit ] Σ[ r ∈ LFT₁ ] (sift ds m ≡ digit2lft e *lft r) × refining₁ r
-fundamental-theorem _ (Lift pre-lft isRefining) = {!!}
+record extracting₁ (m : LFT₁) : Type₀
+record splitting₁ (m : LFT₁) : Type₀ where
+  inductive
+  field
+    splitDigit : Digit
+    leftover : LFT₁
+    isSplit : m ≡ digit2lft splitDigit *lft leftover
+    leftoverExtracts : extracting₁ leftover
+
+record extracting₁ m where
+  coinductive
+  field
+    n : ℕ
+    cont : (ds : DigitList n)
+         → splitting₁ (sift ds m)
+
+fundamental-theorem : ∀ {m}
+                    → refining₁ m
+                    → extracting₁ m
+fundamental-theorem (Lift pre-lft isRefining) = record
+  { n = bound
+  ; cont = cont } where
+  bound : ℕ
+  bound = {!!}
+  cont : (ds : DigitList bound) → splitting₁ (sift ds [ pre-lft ])
+  cont ds = record
+    { splitDigit = {!!}
+    ; leftover = {!!}
+    ; isSplit = {!!}
+    ; leftoverExtracts = {!!}
+    }
+
+record ExtractionMachine : Type₀ where
+  coinductive
+  field
+    nextDigit : Digit
+    {state} : LFT₁
+    extractingState : extracting₁ state
+    next : ExtractionMachine
+
+projectDigits : ExtractionMachine → Stream Digit
+Stream.head (projectDigits machine) = ExtractionMachine.nextDigit machine
+Stream.tail (projectDigits machine) = projectDigits (ExtractionMachine.next machine)
+
+private
+  split-stream : (n : ℕ) → Stream Digit → DigitList n × Stream Digit
+  split-stream zero ds = [] , ds
+  split-stream (suc n) ds = (Stream.head ds ∷ head) , tail where
+    inductive-split = split-stream n (Stream.tail ds)
+    head = proj₁ inductive-split
+    tail = proj₂ inductive-split
+
+fold-over : ∀ {m} → extracting₁ m → Stream Digit → ExtractionMachine
+fold-over {m = m} fundamental stream = unfold where
+  open extracting₁ fundamental
+  temp1 = split-stream n stream
+  heads = proj₁ temp1
+  tail = proj₂ temp1
+  split = cont heads
+  open splitting₁ split
+  -- given all the above, we can give a resulting digit stream
+  unfold : ExtractionMachine
+  ExtractionMachine.nextDigit unfold = splitDigit
+  ExtractionMachine.state unfold = leftover
+  ExtractionMachine.extractingState unfold = leftoverExtracts
+  ExtractionMachine.next unfold = fold-over leftoverExtracts tail
+
+fold-over' : ∀ {m} → refining₁ m → Stream Digit → ExtractionMachine
+fold-over' refining = fold-over (fundamental-theorem refining)
