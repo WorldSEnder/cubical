@@ -1,12 +1,11 @@
 {-# OPTIONS --cubical #-}
-{-# OPTIONS --allow-unsolved-metas #-}
 
 module Cubical.Data.Reals.LFT.Matrix where
 
 open import Cubical.Foundations.Prelude
 open import Cubical.Data.Reals.LFT.IntHelpers
 open import Cubical.Data.Reals.LFT.Rationals
-  renaming (_≤_ to _≤ℚ_)
+  renaming (_≤_ to _≤ℚ_; ∣_∣ to ∣_∣ℚ)
 open import Cubical.HITs.SetQuotients
 open import Cubical.Relation.Nullary
 
@@ -14,7 +13,7 @@ open import Cubical.Relation.Nullary
 -- as the function given by L(x) = (ax + c) / (bx + d)
 -- note that this corresponds to the above interpretation
 -- of interval semantics of digit streams.
--- we could ‌// by a multiplicative factor share between a b c d
+-- we can / by a multiplicative factor shared between a b c d
 -- as this would describe the same function.
 -- L'(x) = a / (bx + d) - b(ax + c) / (bx + d)^2
 --       = (ad - bc) / (bx + d)^2
@@ -47,7 +46,7 @@ module _ (lft : pre-LFT₁) where
   --                  = -determinant / (d(d - b))
   --     L(1) - L(-1) = determinant * (1/(d(d + b)) + 1/(d(d - b)))
   --                  = determinant * ((d-b + d+b)/(d(d^2-b^2)))
-  --                  = determinant / (d^2 - b^2)
+  --                  = 2 * determinant / (d^2 - b^2)
   open pre-LFT₁ lft
   data pre-LFT₁-eq : pre-LFT₁ → Type₀ where
     pre-LFT₁-eq-con : ∀ k → ¬ (k ≡ Int.pos 0)
@@ -97,7 +96,7 @@ module _ (lft : pre-LFT₁) where
       ∣ d - b ∣       ≤∎)
 
     monotonicity : isMonotonic
-    monotonicity a2-b2≡0 = {!binomial-formula d b ∙ a2-b2≡0!}
+    monotonicity a2-b2≡0 = ¬a≡0∧¬b≡0⇒¬ab≡0 ¬d-b≡0 ¬d+b≡0 (binomial-formula d b ∙ a2-b2≡0)
 
     interval-length : ℚ
     interval-length = determinant over signature by monotonicity
@@ -126,9 +125,10 @@ module _ (lft : pre-LFT₁) where
       -1≤L[+1] : -1ℚ ≤ℚ endpoint-1
 
     -- a bounded interval is small (enough to be always admit a digit extraction)
-    -- if its length is < 1/4
+    -- if its length is < 1/2
     isSmallEnough : Type₀
-    isSmallEnough = (numerator interval-length * Int.pos 4) < Int.pos (denominator interval-length)
+    isSmallEnough = ∣ interval-length ∣ℚ ≤ℚ (Int.pos 1 over-const Int.pos 2)
+
   open refining₁-pre using (isSmallEnough; bounded) public
   open bounded₁-pre using (monotonicity; interval-length; midpoint; endpoint1; endpoint-1) public
 
@@ -180,23 +180,31 @@ _*lft_ = elimSetQuotientOp₂ _*pre-lft_ leftPath rightPath where
 
 *lft-id-r : ∀ m → m *lft id-lft ≡ m
 *lft-id-r = elimSetQuotientsProp (λ _ → squash/ _ _) λ m →
-    [ LFT-Mat (Int.pos 0 + m .a) (Int.pos 0 + m .b)
-              (Int.pos 0 + (Int.pos 0 + m .c)) (Int.pos 0 + (Int.pos 0 + m .d)) ]
-  ≡[ i ]⟨ [ LFT-Mat (pos0+ (m .a) (~ i)) (pos0+ (m .b) (~ i))
-                    (pos0+ (pos0+ (m .c) (~ i)) (~ i)) (pos0+ (pos0+ (m .d) (~ i)) (~ i)) ] ⟩
+    [ LFT-Mat (m .a * Int.pos 1 + m .c * Int.pos 0)
+              (m .b * Int.pos 1 + m .d * Int.pos 0)
+              (m .a * Int.pos 0 + m .c * Int.pos 1)
+              (m .b * Int.pos 0 + m .d * Int.pos 1) ]
+  ≡[ i ]⟨ [ LFT-Mat (*pos1 (m .a) i + *-zeroʳ (m .c) i)
+                    (*pos1 (m .b) i + *-zeroʳ (m .d) i)
+                    (*-zeroʳ (m .a) i + *pos1 (m .c) i)
+                    (*-zeroʳ (m .b) i + *pos1 (m .d) i) ] ⟩
+    [ LFT-Mat (m .a) (m .b)
+              (Int.pos 0 + m .c) (Int.pos 0 + m .d) ]
+  ≡[ i ]⟨ [ LFT-Mat (m .a) (m .b) (pos0+ (m .c) (~ i)) (pos0+ (m .d) (~ i)) ] ⟩
     [ m ]
   ∎ where
   open pre-LFT₁
+
 *lft-id-l : ∀ m → id-lft *lft m ≡ m
-*lft-id-l = elimSetQuotientsProp (λ _ → squash/ _ _) λ m → 
+*lft-id-l = elimSetQuotientsProp (λ _ → squash/ _ _) λ m →
     [ LFT-Mat (Int.pos 1 * m .a + Int.pos 0 * m .b)
               (Int.pos 0 * m .a + Int.pos 1 * m .b)
               (Int.pos 1 * m .c + Int.pos 0 * m .d)
               (Int.pos 0 * m .c + Int.pos 1 * m .d) ]
-  ≡[ i ]⟨ [ LFT-Mat (pos1* (m .a) i + pos0* (m .b) (~ i))
-                    (pos0* (m .a) (~ i) + pos1* (m .b) i)
-                    (pos1* (m .c) i + pos0* (m .d) (~ i))
-                    (pos0* (m .c) (~ i) + pos1* (m .d) i) ] ⟩
+  ≡[ i ]⟨ [ LFT-Mat (pos1* (m .a) i + *-zeroˡ (m .b) i)
+                    (*-zeroˡ (m .a) i + pos1* (m .b) i)
+                    (pos1* (m .c) i + *-zeroˡ (m .d) i)
+                    (*-zeroˡ (m .c) i + pos1* (m .d) i) ] ⟩
     [ LFT-Mat (m .a) (Int.pos 0 + m .b)
               (m .c) (Int.pos 0 + m .d) ]
   ≡[ i ]⟨ [ LFT-Mat (m .a) (pos0+ (m .b) (~ i)) (m .c) (pos0+ (m .d) (~ i)) ] ⟩
@@ -210,16 +218,16 @@ _^-1 = elimSetQuotientOp₁ _^-1-pre-lft path where
   path a _ (pre-LFT₁-eq-con k ¬k≡0) = transport (sym (cong (pre-LFT₁-eq _) (^-1-pre-linear k a))) (pre-LFT₁-eq-con k ¬k≡0)
 
 ^-1-pre-inv : ∀ m → isInvertible m → pre-LFT₁-eq id-pre-lft (m *pre-lft (m ^-1-pre-lft))
-^-1-pre-inv m ¬det≡0 = lft-eq-from-path _ (determinant m) ¬det≡0 _ path where
+^-1-pre-inv m ¬det≡0 = lft-eq-from-path id-pre-lft (determinant m) ¬det≡0 _ path where
   open pre-LFT₁ m
   eq-a : determinant m * Int.pos 1 ≡ a * d + c * (- b)
-  eq-a = sym (pos0+ _) ∙ cong (a * d +_) (cong -_ (*-comm b c) ∙ *neg c b)
-  eq-b : Int.pos 0 ≡ b * d + d * (- b)
-  eq-b = sym (neg-refl (b * d)) ∙ cong (b * d +_) (cong -_ (*-comm b d) ∙ *neg d b)
-  eq-c : Int.pos 0 ≡ a * (- c) + c * a
-  eq-c = sym (neg-refl (c * a)) ∙ (cong (c * a +_) (cong -_ (*-comm c a) ∙ *neg a c) ∙ +-comm (c * a) _)
+  eq-a = *pos1 (determinant m) ∙ cong (a * d +_) (neg* b c ∙ *-comm (- b) c)
+  eq-b : determinant m * Int.pos 0 ≡ b * d + d * (- b)
+  eq-b = *-zeroʳ (determinant m) ∙ sym (neg-refl (b * d)) ∙ cong (b * d +_) (neg* b d ∙ *-comm (- b) d)
+  eq-c : determinant m * Int.pos 0 ≡ a * (- c) + c * a
+  eq-c = *-zeroʳ (determinant m) ∙ sym (neg-refl (c * a)) ∙ +-comm (c * a) _ ∙ cong (_+ c * a) (neg* c a ∙ *-comm (- c) a)
   eq-d : determinant m * Int.pos 1 ≡ b * (- c) + d * a
-  eq-d = sym (pos0+ _) ∙ cong (a * d +_) (*neg b c) ∙ +-comm (a * d) _ ∙ cong (b * (- c) +_) (*-comm a d) 
+  eq-d = *pos1 (determinant m) ∙ cong (a * d +_) (*neg b c) ∙ +-comm (a * d) (b * - c) ∙ cong (b * (- c) +_) (*-comm a d)
   path : (determinant m *pre-lft-int id-pre-lft) ≡ (m *pre-lft (m ^-1-pre-lft))
   path i = LFT-Mat (eq-a i) (eq-b i) (eq-c i) (eq-d i)
 

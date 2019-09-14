@@ -11,6 +11,9 @@ open import Cubical.Relation.Nullary
 infixl 7 _⊓_
 infixl 6 _⊔_
 
+*pos1 : ∀ a → a * 1 ≡ a
+*pos1 a = *-suc a 0 ∙ cong (a +_) (sym (0≡m*0 a)) ∙ +-zero a
+
 _≤?_ : ∀ n m → Dec (n ≤ m)
 zero ≤? m = yes (m , +-zero m)
 suc n ≤? zero = no ¬-<-zero

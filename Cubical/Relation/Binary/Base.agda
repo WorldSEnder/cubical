@@ -8,6 +8,13 @@ open import Cubical.Foundations.HLevels
 
 open import Cubical.HITs.SetQuotients.Base
 
+private
+  variable
+    a b c : Level
+    A : Set a
+    B : Set b
+    C : Set c
+
 module BinaryRelation {ℓ ℓ' : Level} {A : Type ℓ} (R : A → A → Type ℓ') where
   isRefl : Type (ℓ-max ℓ ℓ')
   isRefl = (a : A) → R a a
@@ -35,3 +42,6 @@ module BinaryRelation {ℓ ℓ' : Level} {A : Type ℓ} (R : A → A → Type �
         y : A / R
         y = [ b ]
     in (x ≡ y) ≃ R a b
+
+_on_ : (B → B → C) → (A → B) → (A → A → C)
+_*_ on f = λ x y → f x * f y

@@ -3,6 +3,7 @@
 module Cubical.Induction.WellFounded where
 
 open import Cubical.Foundations.Everything
+open import Cubical.Relation.Binary
 
 Rel : ∀{ℓ} → Type ℓ → ∀ ℓ' → Type _
 Rel A ℓ = A → A → Type ℓ
@@ -45,3 +46,12 @@ module _ {ℓ ℓ'} {A : Type ℓ} {_<_ : A → A → Type ℓ'} where
 
       induction-compute : ∀ x → induction x ≡ (e x λ y _ → induction y)
       induction-compute x = wfi-compute x (wf x)
+
+module InverseImage {a b ℓ} {A : Set a} {B : Set b} {_<_ : Rel B ℓ}
+                    (f : A → B) where
+  
+  accessible : ∀ {x} → Acc _<_ (f x) → Acc (_<_ on f) x
+  accessible (acc rs) = acc (λ y fy<fx → accessible (rs (f y) fy<fx))
+
+  wellFounded : WellFounded _<_ → WellFounded (_<_ on f)
+  wellFounded wf = λ x → accessible (wf (f x))

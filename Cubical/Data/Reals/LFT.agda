@@ -68,127 +68,128 @@ record splitting₁-pre-rec (Rec : pre-LFT₁ → Type₀) (m : pre-LFT₁) : Ty
     isSplit : m ≡ digit2prelft splitDigit *pre-lft leftover
     leftoverExtracts : Rec leftover
 
-smallEnough⇒splitting₁-pre : ∀ {lft} → (ref : refining₁-pre lft)
+smallEnough⇒splitting₁-pre : ∀ {lft}
+                           → (ref : refining₁-pre lft)
                            → isSmallEnough ref
                            → splitting₁-pre-rec refining₁-pre lft
 smallEnough⇒splitting₁-pre refining smallEnough = {!!}
 
-record splitting₁-rec (Rec : LFT₁ → Type₀) (m : LFT₁) : Type₀ where
-  inductive
-  field
-    splitDigit : Digit
-    leftover : LFT₁
-    isSplit : m ≡ digit2lft splitDigit *lft leftover
-    leftoverExtracts : Rec leftover
+module UnfoldDefs (A : LFT₁ → Type₀) where
+  record splitting₁-rec (m : LFT₁) : Type₀ where
+    field
+      splitDigit : Digit
+      leftover : LFT₁
+      isSplit : m ≡ digit2lft splitDigit *lft leftover
+      leftoverExtracts : A leftover
+
+  record SplittingSolution (m : LFT₁) (ds : Stream Digit) : Type₀ where
+    field
+      prefix : StreamPrefix ds
+      isSplitting : splitting₁-rec (sift (prefix .StreamPrefix.prefix) m)
+    open splitting₁-rec isSplitting public
+
+  record extracting₁-BaseF (m : LFT₁) : Type₀ where
+    inductive
+    field
+      cont : (ds : Stream Digit) → SplittingSolution m ds
 
 record extracting₁ (m : LFT₁) : Type₀ where
   coinductive
   field
     cont : (ds : Stream Digit)
-         → Σ[ pref ∈ StreamPrefix ds ] splitting₁-rec extracting₁ (sift (pref .StreamPrefix.prefix) m)
+         → UnfoldDefs.SplittingSolution extracting₁ m ds
 
-module Unfold (A : LFT₁ → Type₀) where
-  record extracting₁-BaseF (m : LFT₁) : Type₀ where
-    inductive
-    field
-      cont : (ds : Stream Digit)
-           → Σ[ pref ∈ StreamPrefix ds ] splitting₁-rec A (sift (pref .StreamPrefix.prefix) m)
-  -- the unfold of the coinductive extracting₁
-  module _ (α : ∀ {m} → A m → extracting₁-BaseF m) where
-    open extracting₁ renaming (cont to cont-ext)
-    unfold-extracting : ∀ {m} → A m → extracting₁ m
-    unfold-extracting refm .cont-ext ds = pref , record
-      { splitDigit = x .splitDigit
-      ; leftover = x .leftover
-      ; isSplit = x .isSplit
-      ; leftoverExtracts = unfold-extracting (x .leftoverExtracts)
-      } where
-        open splitting₁-rec
-        ΣprefX = α refm .extracting₁-BaseF.cont ds
-        pref = fst ΣprefX
-        x = snd ΣprefX
-open Unfold refining₁
+module UnfoldCoalg (A : LFT₁ → Type₀) (open UnfoldDefs) (α : ∀ {m} → A m → extracting₁-BaseF A m) where
+  unfold-extracting : ∀ {m} → A m → extracting₁ m
+  unfold-extracting refm .extracting₁.cont ds = record
+    { prefix = prefix
+    ; isSplitting = record
+      { splitDigit = splitDigit
+      ; leftover = leftover
+      ; isSplit = isSplit
+      ; leftoverExtracts = unfold-extracting leftoverExtracts
+    } } where
+      solution = α refm .extracting₁-BaseF.cont ds
+      open SplittingSolution solution
 
-fundamental-theorem-alg : ∀ {m} → refining₁ m → extracting₁-BaseF m
-fundamental-theorem-alg (Lift-pre pre-lft isRefining) = record { cont = cont } where
-  -- to extract a digit to the left, we multiply
-  -- by the inverse of the digit's LFT matrix
-  -- the result must be a refining matrix to
-  -- continually invoke again the fundamental theorem
-  -- etc...
-  -- pulling the digit (+ k) we multiply on the right
-  -- [a c] * [1 k] = [a (ka+2c)]
-  -- [b d]   [0 2]   [b (kb+2d)]
-  -- the new determinant = 2*old determinant
-  -- but the lengths and L(0) are not at all "nicely"
-  -- changed. We need a good bound for ((2d+kb)^2 - b^2)/(d^2 - b^2),
-  -- which should be at least > 2.
-  --     ((2d+kb)^2 - b^2)/(d^2 - b^2) ≥ 2 + C
-  -- <=> (bounded₁)
-  --     (2d+kb)^2 - b^2 ≥ 2 * (d^2 - b^2) + C * (d^2 - b^2)
-  -- <=>
-  --     2d^2 + 2kdb - C * (d^2 - b^2) + (k^2)b^2 + b^2 > 0
-  -- <=>
-  --     (k^2)b^2 + b^2 ≥ 0
-  --  ∧  2d^2 + 2kdb - C * (d^2 - b^2)
-  --          (v  this might have been - , 0 , or +, depending on k, minus gives the worst bound)
-  --    ≥ 2d^2 - 2∣ db ∣ - C * (d^2 - b^2)
-  --    ≥ 2∣ d ∣(∣ d ∣ - ∣ b ∣) - C * (∣ d ∣^2 - ∣ b ∣^2) ≥ 0
-  -- choose C(b, d) = 2∣ d ∣(∣ d ∣ - ∣ b ∣) / (∣ d ∣^2 - ∣ b ∣^2)
-  --                = 2∣ d ∣ / (∣ d ∣ + ∣ b ∣)
-  --                = 2 - ∣ b ∣ / (∣ d ∣ + ∣ b ∣)
-  -- note C > 0
-  -- finally, note that ∣ kb + 2d ∣ > ∣ d ∣
-  -- and C is monotonically growing with ∣ d ∣ and constant ∣ b ∣
-  -- so the first bound is conservative, even after a constant amount of digits
-  -- and the algorithm terminates in finite time.
-  -- ∎
-  -- notice though that this preserves bounded₁ and refining₁
-  -- also the magnitude of d is strictly monotonically growing.
-  -- this should be clear because we are doing LF function
-  -- composition here.
-  --
-  -- to extract the digit (- k) we multiply with the inverse
-  -- but on the left
-  -- [2 k] * [a c] = [(2a+kb) (2c+kd)]
-  -- [0 1]   [b d]   [b       d      ]   
-  -- notice that this preserves b and d, hence also bounded₁.
-  -- the new determinant = 2*old determinant, and the lengths
-  -- are also all doubled evenly around the midpoint.
-  -- I.e., emitting a 0 corresponds to blowing up the interval
-  -- around 0 by doubling all values.
-  -- Emitting a 1 corresponds to blowing up the interval around
-  -- 1 by double every value's difference to 1.
+module _ where
+  open UnfoldDefs refining₁
+  open UnfoldCoalg refining₁
 
-  -- The following is a sufficient, but not a necessary condition
-  -- to be able to emit at least 1 digit:
-  -- If an interval has length ≤ 1/4 then at least one of these
-  -- blowups safely keeps the interval after emission in [-1, 1]:
-  -- Suppose the left endpoint is in [-1, -1/2], then the right
-  -- endpoint is in [-1, 0] and we can safely emit -1.
-  -- Suppose the left endpoint is in [-1/2, 0], then the right
-  -- endpoint is in [-1/2, 1/2] and we can emit 0.
-  -- Suppose the left endpoint is in [0, 1], then we can safely
-  -- emit a 1.
-  -- naturally overlaps are possible. If the interval is [.2, .4]
-  -- then we can either emit a 0 with a new interval [.4, .8], then
-  -- emit a 1 with new interval [-.2, .6]
-  -- OR
-  -- emit a 1 with a new interval of [-.6, -.2] then emit a -1
-  -- with new interval [-.2, .6]. Again we see 0,1 ~~ 1,-1.
-  cont : (ds : Stream Digit)
-       → Σ[ pref ∈ StreamPrefix ds ] splitting₁-rec refining₁ (sift (pref .StreamPrefix.prefix) [ pre-lft ])
-  cont ds = {!!} , record
-    { splitDigit = {!!}
-    ; leftover = {!!}
-    ; isSplit = {!!}
-    ; leftoverExtracts = {!!}
-    }
+  fundamental-theorem-alg : ∀ {m} → refining₁ m → extracting₁-BaseF m
+  fundamental-theorem-alg (Lift-pre pre-lft isRefining) = record { cont = solver } where
+    -- to extract a digit to the left, we multiply
+    -- by the inverse of the digit's LFT matrix
+    -- the result must be a refining matrix to
+    -- continually invoke again the fundamental theorem
+    -- etc...
+    -- pulling the digit (+ k) we multiply on the right
+    -- [a c] * [1 k] = [a (ka+2c)]
+    -- [b d]   [0 2]   [b (kb+2d)]
+    -- the new determinant = 2*old determinant
+    -- but the lengths and L(0) are not at all "nicely"
+    -- changed. We need a good bound for ((2d+kb)^2 - b^2)/(d^2 - b^2),
+    -- which should be at least > 2.
+    --     ((2d+kb)^2 - b^2)/(d^2 - b^2) ≥ 2 + C
+    -- <=> (bounded₁)
+    --     (2d+kb)^2 - b^2 ≥ 2 * (d^2 - b^2) + C * (d^2 - b^2)
+    -- <=>
+    --     2d^2 + 2kdb - C * (d^2 - b^2) + (k^2)b^2 + b^2 > 0
+    -- <=>
+    --     (k^2)b^2 + b^2 ≥ 0
+    --  ∧  2d^2 + 2kdb - C * (d^2 - b^2)
+    --          (v  this might have been - , 0 , or +, depending on k, minus gives the worst bound)
+    --    ≥ 2d^2 - 2∣ db ∣ - C * (d^2 - b^2)
+    --    ≥ 2∣ d ∣(∣ d ∣ - ∣ b ∣) - C * (∣ d ∣^2 - ∣ b ∣^2) ≥ 0
+    -- choose C(b, d) = 2∣ d ∣(∣ d ∣ - ∣ b ∣) / (∣ d ∣^2 - ∣ b ∣^2)
+    --                = 2∣ d ∣ / (∣ d ∣ + ∣ b ∣)
+    --                = 2 - ∣ b ∣ / (∣ d ∣ + ∣ b ∣)
+    -- note C > 0
+    -- finally, note that ∣ kb + 2d ∣ > ∣ d ∣
+    -- and C is monotonically growing with ∣ d ∣ and constant ∣ b ∣
+    -- so the first bound is conservative, even after a constant amount of digits
+    -- and the algorithm terminates in finite time.
+    -- ∎
+    -- notice though that this preserves bounded₁ and refining₁
+    -- also the magnitude of d is strictly monotonically growing.
+    -- this should be clear because we are doing LF function
+    -- composition here.
+    --
+    -- to extract the digit (- k) we multiply with the inverse
+    -- but on the left
+    -- [2 k] * [a c] = [(2a+kb) (2c+kd)]
+    -- [0 1]   [b d]   [b       d      ]   
+    -- notice that this preserves b and d, hence also bounded₁.
+    -- the new determinant = 2*old determinant, and the lengths
+    -- are also all doubled evenly around the midpoint.
+    -- I.e., emitting a 0 corresponds to blowing up the interval
+    -- around 0 by doubling all values.
+    -- Emitting a 1 corresponds to blowing up the interval around
+    -- 1 by double every value's difference to 1.
 
-fundamental-theorem : ∀ {m}
-                    → refining₁ m
-                    → extracting₁ m
-fundamental-theorem = unfold-extracting fundamental-theorem-alg
+    -- The following is a sufficient, but not a necessary condition
+    -- to be able to emit at least 1 digit:
+    -- If an interval has length ≤ 1/4 then at least one of these
+    -- blowups safely keeps the interval after emission in [-1, 1]:
+    -- Suppose the left endpoint is in [-1, -1/2], then the right
+    -- endpoint is in [-1, 0] and we can safely emit -1.
+    -- Suppose the left endpoint is in [-1/2, 0], then the right
+    -- endpoint is in [-1/2, 1/2] and we can emit 0.
+    -- Suppose the left endpoint is in [0, 1], then we can safely
+    -- emit a 1.
+    -- naturally overlaps are possible. If the interval is [.2, .4]
+    -- then we can either emit a 0 with a new interval [.4, .8], then
+    -- emit a 1 with new interval [-.2, .6]
+    -- OR
+    -- emit a 1 with a new interval of [-.6, -.2] then emit a -1
+    -- with new interval [-.2, .6]. Again we see 0,1 ~~ 1,-1.
+    solver : (ds : Stream Digit) → SplittingSolution [ pre-lft ] ds
+    solver ds = {!!}
+
+  fundamental-theorem : ∀ {m}
+                      → refining₁ m
+                      → extracting₁ m
+  fundamental-theorem = unfold-extracting fundamental-theorem-alg
 
 record ExtractionMachine : Type₀ where
   coinductive
@@ -206,10 +207,9 @@ fold-over : ∀ {m} → extracting₁ m → Stream Digit → ExtractionMachine
 fold-over {m = m} fundamental stream = unfold where
   open extracting₁ fundamental
   prefixTail = cont stream
-  prefix = fst prefixTail
-  split = snd prefixTail
+  prefix = prefixTail .UnfoldDefs.SplittingSolution.prefix
   tail = prefix .StreamPrefix.rest
-  open splitting₁-rec split
+  open UnfoldDefs.SplittingSolution prefixTail
   -- given all the above, we can give a resulting digit stream
   unfold : ExtractionMachine
   ExtractionMachine.nextDigit unfold = splitDigit

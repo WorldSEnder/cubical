@@ -22,6 +22,11 @@ open import Cubical.Data.Sum
 open import Cubical.Data.Empty
 open import Cubical.Data.Unit
 
+data Singleton {a} {A : Set a} (x : A) : Set a where
+  _with≡_ : (y : A) → x ≡ y → Singleton x
+inspect : ∀ {a} {A : Set a} (x : A) → Singleton x
+inspect x = x with≡ refl
+
 pos-distrib : ∀ m n → pos (m +ℕ n) ≡ pos m + pos n
 pos-distrib zero n = pos0+ _
 pos-distrib (suc m) n =
@@ -35,6 +40,10 @@ negsuc-distrib (suc m) n =
   predInt (negsuc (suc m +ℕ n)) ≡⟨ cong predInt (negsuc-distrib m n) ⟩
   predInt (negsuc m + negsuc n) ≡⟨ predInt+ (negsuc m) (negsuc n) ⟩
   negsuc (suc m) + negsuc n     ∎
+
+negsuc-pos-distrib : ∀ m n → negsuc (m +ℕ n) ≡ negsuc m - pos n
+negsuc-pos-distrib m zero = cong negsuc (NatH.+-zero m)
+negsuc-pos-distrib m (suc n) = cong negsuc (NatH.+-suc m n) ∙ negsuc-distrib m n
 
 0≡n-n : ∀ n → pos 0 ≡ n - n
 0≡n-n n = sym (plusMinus n _) ∙ (cong (_- n) (sym (pos0+ n)))
@@ -146,6 +155,16 @@ sign-mag-◃ (negsuc n) = refl
 ◃-distrib-+ neg (suc a) zero = cong negsuc (sym (NatH.+-zero a))
 ◃-distrib-+ neg (suc a) (suc b) = sym (negsuc-distrib a b) ∙ cong negsuc (sym (NatH.+-suc a b))
 
+neg-sign : ∀ b → sign (- b) ≡ inv-sign (sign b)
+neg-sign (pos zero) = refl
+neg-sign (pos (suc n)) = refl
+neg-sign (negsuc n) = refl
+
+neg-mag : ∀ b → mag (- b) ≡ mag b
+neg-mag (pos zero) = refl
+neg-mag (pos (suc n)) = refl
+neg-mag (negsuc n) = refl
+
 sign-neg-predInt : ∀ n → predInt (Sign.neg ◃ n) ≡ Sign.neg ◃ suc n
 sign-neg-predInt zero = refl
 sign-neg-predInt (suc n) = refl
@@ -156,6 +175,12 @@ inv-sign-neg pos zero = refl
 inv-sign-neg pos (suc n) = refl
 inv-sign-neg neg zero = refl
 inv-sign-neg neg (suc n) = refl
+
+neg-inv-sign : ∀ s n → - (s ◃ n) ≡ inv-sign s ◃ n
+neg-inv-sign s n =
+  - (s ◃ n)                     ≡[ i ]⟨ - (inv-sign-involutive s (~ i) ◃ n) ⟩
+  - (inv-sign (inv-sign s) ◃ n) ≡⟨ sym (inv-sign-neg (inv-sign s) n) ⟩
+  inv-sign s ◃ n                ∎
 
 inv-sign-mag-◃ : ∀ b → inv-sign (sign b) ◃ mag b ≡ - b
 inv-sign-mag-◃ b = sym (neg-inv _) ∙ cong (-_) (sym (inv-sign-neg _ _)∙ sym (sign-mag-◃ _))
@@ -225,105 +250,92 @@ mag-assoc a b c =
 *-zeroʳ (pos n) = cong ((sign (pos n) *sign Sign.neut) ◃_) (sym (NatH.0≡m*0 n)) ∙ ◃-sign-zero _
 *-zeroʳ (negsuc n) = refl
 
-*pos1 : ∀ b → pos 1 * b ≡ b
-*pos1 b = (λ i → sign-pos* (sign b) i ◃ NatH.+-zero (mag b) i) ∙ sym (sign-mag-◃ b)
+*pos1 : ∀ b → b * pos 1 ≡ b
+*pos1 z = (λ i → sign-*pos (sign z) i ◃ NatH.*-comm (mag z) 1 i) ∙ cong (sign z ◃_) (NatH.+-zero (mag z)) ∙ sym (sign-mag-◃ z)
+
+pos1* : ∀ z → pos 1 * z ≡ z
+pos1* z = (λ i → sign-pos* (sign z) i ◃ NatH.+-zero (mag z) i) ∙ sym (sign-mag-◃ z)
+
+negsuc0* : ∀ b → negsuc zero * b ≡ - b
+negsuc0* b =
+  (neg *sign sign b) ◃ (mag b +ℕ 0) ≡[ i ]⟨ sign-neg* (sign b) i ◃ (NatH.+-zero (mag b) i) ⟩
+  inv-sign (sign b) ◃ mag b         ≡[ i ]⟨ inv-sign-mag-◃ b i ⟩
+  - b                               ∎
+
+*negsuc0 : ∀ b → b * negsuc 0 ≡ - b
+*negsuc0 b =
+  (sign b *sign neg) ◃ (mag b *ℕ 1) ≡[ i ]⟨ sign-*neg (sign b) i ◃ (NatH.*pos1 (mag b) i) ⟩
+  inv-sign (sign b) ◃ mag b         ≡[ i ]⟨ inv-sign-mag-◃ b i ⟩
+  - b                               ∎
 
 *pos-suc : ∀ n b → (pos n * b) + b ≡ pos (suc n) * b
-*pos-suc zero b = cong (_+ b) (◃-sign-zero _) ∙ sym (pos0+ b) ∙ sym (*pos1 b)
+*pos-suc zero b = cong (_+ b) (◃-sign-zero _) ∙ sym (pos0+ b) ∙ sym (pos1* b)
 *pos-suc (suc n) b =
   ((pos *sign sign b) ◃ (mag b +ℕ n *ℕ mag b)) + b ≡[ i ]⟨ sign-pos* (sign b) i ◃ (mag b +ℕ n *ℕ mag b) + sign-mag-◃ b i ⟩
   sign b ◃ (mag b +ℕ n *ℕ mag b) + sign b ◃ mag b  ≡⟨ ◃-distrib-+ (sign b) _ (mag b) ⟩
   sign b ◃ ((mag b +ℕ n *ℕ mag b) +ℕ mag b)        ≡[ i ]⟨ sign-pos* (sign b) (~ i) ◃ NatH.+-comm (mag b +ℕ n *ℕ mag b) (mag b) i ⟩
   (pos *sign sign b) ◃ (mag b +ℕ (mag b +ℕ n *ℕ mag b)) ∎
 
-*negsuc0-suc : ∀ b → (negsuc zero * b) + b ≡ pos zero
-*negsuc0-suc b = 
-  (neg *sign sign b) ◃ (mag b +ℕ 0) + b ≡[ i ]⟨ sign-neg* (sign b) i ◃ (NatH.+-zero (mag b) i) + b ⟩
-  inv-sign (sign b) ◃ mag b + b         ≡[ i ]⟨ inv-sign-mag-◃ b i + b ⟩
-  - b + b                               ≡⟨ +-comm (- b) b ∙ sym (0≡n-n b) ⟩
-  pos 0                                 ∎
-
-*negsuc-suc : ∀ n b → (negsuc n * b) + b ≡ (sucInt (negsuc n) * b)
-*negsuc-suc zero b = *negsuc0-suc b ∙ sym (*-zeroˡ b)
-*negsuc-suc (suc n) b =
-  (negsuc (suc n) * b) + b                       ≡[ i ]⟨ sign-neg* (sign b) i ◃ (mag b +ℕ suc n *ℕ mag b) + b ⟩
-  inv-sign (sign b) ◃ (suc (suc n) *ℕ mag b) + b ≡[ i ]⟨ ◃-distrib-+ (inv-sign (sign b)) (mag b) (suc n *ℕ mag b) (~ i) + b ⟩
+*negsuc-suc : ∀ n b → negsuc (suc n) * b ≡ negsuc n * b - b
+*negsuc-suc n b =
+  negsuc (suc n) * b                         ≡[ i ]⟨ sign-neg* (sign b) i ◃ (mag b +ℕ suc n *ℕ mag b) ⟩
+  inv-sign (sign b) ◃ (suc (suc n) *ℕ mag b) ≡[ i ]⟨ ◃-distrib-+ (inv-sign (sign b)) (mag b) (suc n *ℕ mag b) (~ i) ⟩
   inv-sign (sign b) ◃ mag b
-    + inv-sign (sign b) ◃ (suc n *ℕ mag b) + b   ≡[ i ]⟨ inv-sign-mag-◃ b i + sign-neg* (sign b) (~ i) ◃ (suc n *ℕ mag b) + b ⟩
-  - b + negsuc n * b + b                         ≡[ i ]⟨ +-comm (- b) (negsuc n * b) i + b ⟩
-  negsuc n * b - b + b                           ≡⟨ minusPlus b _ ⟩
-  (negsuc n * b)           ∎
+    + inv-sign (sign b) ◃ (suc n *ℕ mag b)   ≡[ i ]⟨ inv-sign-mag-◃ b i + sign-neg* (sign b) (~ i) ◃ (suc n *ℕ mag b) ⟩
+  - b + negsuc n * b                         ≡[ i ]⟨ +-comm (- b) (negsuc n * b) i ⟩
+  negsuc n * b - b                           ∎
 
-data Singleton {a} {A : Set a} (x : A) : Set a where
-  _with≡_ : (y : A) → x ≡ y → Singleton x
-inspect : ∀ {a} {A : Set a} (x : A) → Singleton x
-inspect x = x with≡ refl
+private
+  *-distrib-stepsuc : ∀ k m n → pos (suc k) * (m + n) ≡ pos k * (m + n) + (m + n)
+  *-distrib-stepsuc k m n = sym (*pos-suc k (m + n))
+  *-distrib-stepnegsuc : ∀ k m n → negsuc (suc k) * (m + n) ≡ negsuc k * (m + n) - (m + n)
+  *-distrib-stepnegsuc k m n = *negsuc-suc k (m + n)
+  reassoc4 : ∀ m n o p → (m + n) + (o + p) ≡ (m + o) + (n + p)
+  reassoc4 m n o p = +-assoc (m + n) o p ∙ cong (_+ p) (sym (+-assoc m n o))
+                   ∙ cong (λ t → m + t + p) (+-comm n o)
+                   ∙ cong (_+ p) (+-assoc m o n) ∙ sym (+-assoc (m + o) n p)
 
-*-distribʳ-+ : ∀ k m n → m * k + n * k ≡ (m + n) * k
-*-distribʳ-+ k m n with inspect (m + n)
-...                | pos (suc nm) with≡ prf = {!!}
-...                | pos zero     with≡ prf = {!!}
-...                | negsuc nm    with≡ prf = {!!}
+*-distribˡ-+ : ∀ k m n → k * (m + n) ≡ k * m + k * n
+*-distribˡ-+ (pos zero) m n =
+  pos 0 * (m + n)       ≡⟨ *-zeroˡ (m + n) ⟩
+  pos 0 + pos 0         ≡[ i ]⟨ ◃-sign-zero (neut *sign sign m) (~ i) + ◃-sign-zero (neut *sign sign n) (~ i) ⟩
+  pos 0 * m + pos 0 * n ∎
+*-distribˡ-+ (pos (suc k)) m n =
+  pos (suc k) * (m + n)             ≡⟨ *-distrib-stepsuc k m n ⟩
+  pos k * (m + n) + (m + n)         ≡[ i ]⟨ *-distribˡ-+ (pos k) m n i + (m + n) ⟩
+  (pos k * m + pos k * n) + (m + n) ≡⟨ reassoc4 (pos k * m) (pos k * n) m n ⟩
+  (pos k * m + m) + (pos k * n + n) ≡[ i ]⟨ *pos-suc k m i + *pos-suc k n i ⟩
+  pos (suc k) * m + pos (suc k) * n ∎
+*-distribˡ-+ (negsuc zero) m n =
+  negsuc 0 * (m + n)          ≡⟨ negsuc0* (m + n) ⟩
+  - (m + n)                   ≡⟨ neg-distrib-+ m n ⟩
+  - m - n                     ≡[ i ]⟨ negsuc0* m (~ i) + negsuc0* n (~ i) ⟩
+  negsuc 0 * m + negsuc 0 * n ∎
+*-distribˡ-+ (negsuc (suc k)) m n =
+  negsuc (suc k) * (m + n)                  ≡⟨ *negsuc-suc k (m + n) ⟩
+  negsuc k * (m + n) - (m + n)              ≡[ i ]⟨ *-distribˡ-+ (negsuc k) m n i + neg-distrib-+ m n i ⟩
+  (negsuc k * m + negsuc k * n) + (- m - n) ≡⟨ reassoc4 (negsuc k * m) (negsuc k * n) (- m) (- n) ⟩
+  (negsuc k * m - m) + (negsuc k * n - n)   ≡[ i ]⟨ *negsuc-suc k m (~ i) + *negsuc-suc k n (~ i) ⟩
+  negsuc (suc k) * m + negsuc (suc k) * n   ∎
 
-*-distribˡ-+ : ∀ k m n → k * m + k * n ≡ k * (m + n)
-*-distribˡ-+ k m n =
-  k * m + k * n ≡[ i ]⟨ *-comm k m i + *-comm k n i ⟩
-  m * k + n * k ≡⟨ *-distribʳ-+ k m n ⟩
+*-distribʳ-+ : ∀ k m n → (m + n) * k ≡ m * k + n * k
+*-distribʳ-+ k m n =
   (m + n) * k   ≡⟨ *-comm (m + n) k ⟩
-  k * (m + n)   ∎
+  k * (m + n)   ≡⟨ *-distribˡ-+ k m n ⟩
+  k * m + k * n ≡[ i ]⟨ *-comm k m i + *-comm k n i ⟩
+  m * k + n * k ∎
 
-{-
-pos-suc* : ∀ n b → (b * pos n) + b ≡ b * pos (suc n)
-pos-suc* n (pos m) = sym (pos-distrib _ m) ∙ cong pos (NatH.+-comm _ m) ∙ cong pos (sym (NatH.*-suc m n))
-pos-suc* n (negsuc zero) = sign-neg-predInt _
-pos-suc* n (negsuc (suc m)) = predInt+ _ (negsuc m) ∙ cong (_+ negsuc m) (sign-neg-predInt _)
-                            ∙ sym (negsuc-distrib _ m) ∙ cong negsuc reason where
-  reason2 : n +ℕ m *ℕ n +ℕ m ≡ n +ℕ m *ℕ suc n
-  reason2 = sym (NatH.+-assoc n _ m) ∙ cong (n +ℕ_) (NatH.+-comm _ m ∙ sym (NatH.*-suc m _))
-  reason : suc (n +ℕ (n +ℕ m *ℕ n) +ℕ m) ≡ n +ℕ suc (n +ℕ m *ℕ suc n)
-  reason = cong suc (sym (NatH.+-assoc n _ m)) ∙ sym (NatH.+-suc n _) ∙ λ i → n +ℕ suc (reason2 i)
+sucInt* : ∀ a b → sucInt a * b ≡ a * b + b
+sucInt* a b = *-distribʳ-+ b a (pos 1) ∙ cong (a * b +_) (pos1* b)
 
-negsuc-suc* : ∀ n b → (b * negsuc (suc n)) + b ≡ (b * negsuc n)
-negsuc-suc* n (pos m) = {!!}
-negsuc-suc* n (negsuc m) = {!!}
+*sucInt : ∀ a b → a * sucInt b ≡ a * b + a
+*sucInt a b = *-distribˡ-+ a b (pos 1) ∙ cong (a * b +_) (*pos1 a)
 
-sucInt* : ∀ a b → a * b + b ≡ sucInt a * b
-sucInt* (pos n) b = *pos-suc n b
-sucInt* (negsuc zero) b = *negsuc0-suc b ∙ sym (*-zeroˡ b)
-sucInt* (negsuc (suc n)) b = *negsuc-suc n b
+predInt* : ∀ a b → predInt a * b ≡ a * b - b
+predInt* a b = *-distribʳ-+ b a (negsuc 0) ∙ cong (a * b +_) (negsuc0* b)
 
-*sucInt : ∀ a b → a * b + a ≡ a * sucInt b
-*sucInt a b = {!!}
-
-predInt* : ∀ a b → a * b - b ≡ predInt a * b
-predInt* a b = {!!}
-
-*predInt : ∀ a b → a * b - a ≡ a * predInt b
-*predInt a b = {!!}
-
-*negsuc0 : ∀ z → z * negsuc 0 ≡ - z
-*negsuc0 z = {!!}
-
-pos1* : ∀ z → pos 1 * z ≡ z
-pos1* z = sym (*pos-suc 0 z) ∙ (λ i → *-zeroˡ z i + z) ∙ sym (pos0+ _)
-
-*pos1 : ∀ b → b * pos 1 ≡ b
-*pos1 b = sym (pos-suc* 0 b) ∙ (λ i → *-zeroʳ b i + b) ∙ sym (pos0+ _)
-
-*-distribʳ-+ (Int.pos zero) m n = (λ i → *-zeroʳ m i + *-zeroʳ n i) ∙ (λ i → *-zeroʳ (m + n) (~ i)) --refl
-*-distribʳ-+ (Int.pos (suc k)) m n =
-  m * Int.pos (suc k) + n * Int.pos (suc k) ≡[ i ]⟨ *sucInt m (pos k) (~ i) + *sucInt n (pos k) (~ i) ⟩
-  (m * Int.pos k + m) + (n * Int.pos k + n) ≡⟨ {!!} ⟩
-  (m * Int.pos k + n * Int.pos k) + (m + n) ≡[ i ]⟨ *-distribʳ-+ (Int.pos k) m n i + (m + n) ⟩
-  (m + n) * Int.pos k + (m + n)             ≡⟨ *sucInt (m + n) (pos k) ⟩
-  (m + n) * Int.pos (suc k)                 ∎
-*-distribʳ-+ (Int.negsuc zero) m n = {!!}
-*-distribʳ-+ (Int.negsuc (suc k)) m n = {!!}
-{-  m * Int.negsuc (suc k) + n * Int.negsuc (suc k) ≡⟨ refl ⟩
-  (m * Int.negsuc k - m) + (n * Int.negsuc k - n) ≡⟨ neg-swap _ m _ n ⟩
-  (m * Int.negsuc k + n * Int.negsuc k) - (m + n) ≡[ i ]⟨ *-distribʳ-+ (Int.negsuc k) m n i - (m + n) ⟩
-  (m + n) * Int.negsuc k - (m + n)                ≡⟨ refl ⟩
-  (m + n) * Int.negsuc (suc k)                    ∎ -}
+*predInt : ∀ a b → a * predInt b ≡ a * b - a
+*predInt a b = *-distribˡ-+ a b (negsuc 0) ∙ cong (a * b +_) (*negsuc0 a)
 
 neg-refl : ∀ a → a - a ≡ pos 0
 neg-refl a =
@@ -332,22 +344,14 @@ neg-refl a =
   pos 0         ∎
 
 *neg : ∀ m n → - (m * n) ≡ m * (- n)
-*neg m (pos zero) = {!!} --refl
-*neg m (pos (suc zero)) = {!!} --neg-distrib-+ _ m
-*neg m (pos (suc (suc n))) = {!!}
-{-  - (m * pos (suc n) + m) ≡⟨ neg-distrib-+ _ m ⟩
-  - (m * pos (suc n)) - m ≡[ i ]⟨ *neg m (pos (suc n)) i - m ⟩
-  m * (- pos (suc n)) - m ≡⟨ refl ⟩
-  m * negsuc (suc n)      ∎ -}
-*neg m (negsuc zero) = {!!}
-{-  - (pos 0 + (- m)) ≡⟨ neg-distrib-+ _ (- m) ⟩
-  pos 0 - (- m)     ≡[ i ]⟨ pos 0 + neg-inv m i ⟩
-  pos 0 + m         ∎ -}
-*neg m (negsuc (suc n)) = {!!}
-{-  - (m * negsuc n - m)     ≡⟨ neg-distrib-+ _ (- m) ⟩
-  - (m * negsuc n) - (- m) ≡[ i ]⟨ *neg m (negsuc n) i + neg-inv m i ⟩
-  m * (- negsuc n) + m     ≡⟨ refl ⟩
-  m * pos (suc (suc n))    ∎ -}
+*neg m n =
+  - (m * n)                                         ≡⟨ neg-inv-sign _ _ ⟩
+  inv-sign (sign m *sign sign n) ◃ (mag m *ℕ mag n) ≡[ i ]⟨ sign-path i ◃ mag-path i ⟩
+  m * (- n)                                         ∎ where
+  sign-path : inv-sign (sign m *sign sign n) ≡ sign m *sign sign (- n)
+  sign-path = sym (sign-*neg _) ∙ sym (*sign-assoc _ _ _) ∙ cong (sign m *sign_) (sign-*neg (sign n) ∙ sym (neg-sign n))
+  mag-path : mag m *ℕ mag n ≡ mag m *ℕ mag (- n)
+  mag-path i = mag m *ℕ (neg-mag n (~ i))
 
 neg* : ∀ m n → - (m * n) ≡ (- m) * n
 neg* m n =
@@ -359,22 +363,20 @@ neg* m n =
 *-distrib-assocˡ-+ : ∀ k m o n p → (k * m) * o + (k * n) * p ≡ k * (m * o + n * p)
 *-distrib-assocˡ-+ k m o n p =
   (k * m) * o + (k * n) * p ≡[ i ]⟨ *-assoc k m o (~ i) + *-assoc k n p (~ i) ⟩
-  k * (m * o) + k * (n * p) ≡⟨ *-distribˡ-+ k (m * o) (n * p) ⟩
+  k * (m * o) + k * (n * p) ≡⟨ sym (*-distribˡ-+ k (m * o) (n * p)) ⟩
   k * (m * o + n * p)       ∎
 *-distrib-assocʳ-+ : ∀ k m o n p → m * (k * o) + n * (k * p) ≡ k * (m * o + n * p)
 *-distrib-assocʳ-+ k m o n p =
   m * (k * o) + n * (k * p) ≡[ i ]⟨ m * *-comm k o i + n * *-comm k p i ⟩
   m * (o * k) + n * (p * k) ≡[ i ]⟨ *-assoc m o k i + *-assoc n p k i ⟩
-  (m * o) * k + (n * p) * k ≡⟨ *-distribʳ-+ k (m * o) (n * p) ∙ *-comm _ k ⟩
+  (m * o) * k + (n * p) * k ≡⟨ sym (*-distribʳ-+ k (m * o) (n * p)) ∙ *-comm _ k ⟩
   k * (m * o + n * p)       ∎
 
 *negneg : ∀ m n → m * n ≡ (- m) * (- n)
 *negneg m n =
   m * n         ≡⟨ sym (neg-inv _) ⟩
-  - - (m * n)   ≡[ i ]⟨ - *neg m n i ⟩
-  - (m * (- n)) ≡[ i ]⟨ - *-comm m (- n) i ⟩
-  - ((- n) * m) ≡⟨ *neg (- n) m ⟩
-  (- n) * (- m) ≡⟨ *-comm (- n) (- m) ⟩
+  - - (m * n)   ≡⟨ cong (-_) (neg* _ _) ⟩
+  - ((- m) * n) ≡⟨ *neg _ _ ⟩
   (- m) * (- n) ∎
 
 infix 4 _≤_ _<_
@@ -386,7 +388,7 @@ _<_ : (m : Int) (n : Int) → Type₀
 m < n = sucInt m ≤ n
 
 pos-≤-pos : ∀ {m n} → m NatH.≤ n → pos m ≤ pos n
-pos-≤-pos (d , mdn) = d , {!!} -- sym (pos-distrib _ d) ∙ cong pos (NatH.+-comm _ d ∙ mdn)
+pos-≤-pos (d , mdn) = d , sym (pos-distrib _ d) ∙ cong Int.pos (NatH.+-comm _ d ∙ mdn)
 
 unpos-≤-unpos : ∀ {m n} → pos m ≤ pos n → m NatH.≤ n
 unpos-≤-unpos (d , mdn) = d , injPos (cong pos (sym (NatH.+-comm _ d)) ∙ pos-distrib _ d ∙ mdn)
@@ -394,20 +396,20 @@ unpos-≤-unpos (d , mdn) = d , injPos (cong pos (sym (NatH.+-comm _ d)) ∙ pos
 negsuc-≤-negsuc : ∀ {m n} → n NatH.≤ m → negsuc m ≤ negsuc n
 negsuc-≤-negsuc {m = m} {n} (d , ndm) = d , reason where
   reason : negsuc m + pos d ≡ negsuc n
-  reason = {!!} {- negsuc m + pos d         ≡[ i ]⟨ negsuc (ndm (~ i)) + pos d ⟩
+  reason = negsuc m + pos d         ≡[ i ]⟨ negsuc (ndm (~ i)) + pos d ⟩
            negsuc (d +ℕ n) + pos d  ≡[ i ]⟨ negsuc (NatH.+-comm d n i) + pos d ⟩
-           negsuc (n +ℕ d) + pos d  ≡[ i ]⟨ negsuc-distrib n d i + pos d ⟩
+           negsuc (n +ℕ d) + pos d  ≡[ i ]⟨ negsuc-pos-distrib n d i + pos d ⟩
            negsuc n - pos d + pos d ≡⟨ minusPlus (pos d) _ ⟩
-           negsuc n                ∎ -}
+           negsuc n                ∎
 
 unnegsuc-≤-unnegsuc : ∀ {m n} → negsuc m ≤ negsuc n → n NatH.≤ m
 unnegsuc-≤-unnegsuc {m = m} {n} (d , ndm) = d , injNegsuc reason where
   reason : negsuc (d +ℕ n) ≡ negsuc m
-  reason = {!!} {- negsuc (d +ℕ n)          ≡[ i ]⟨ negsuc (NatH.+-comm d n i) ⟩
-           negsuc (n +ℕ d)          ≡⟨ negsuc-distrib n d ⟩
+  reason = negsuc (d +ℕ n)          ≡[ i ]⟨ negsuc (NatH.+-comm d n i) ⟩
+           negsuc (n +ℕ d)          ≡⟨ negsuc-pos-distrib n d ⟩
            negsuc n - pos d         ≡[ i ]⟨ sym ndm i - pos d ⟩
            negsuc m + pos d - pos d ≡⟨ plusMinus (pos d) _ ⟩
-           negsuc m                 ∎ -}
+           negsuc m                 ∎
 
 ¬pos-≤-negsuc : ∀ m n → ¬ pos m ≤ negsuc n
 ¬pos-≤-negsuc m n (d , mdn) = posNotnegsuc (m +ℕ d) n (pos-distrib m d ∙ mdn)
@@ -686,8 +688,8 @@ square-mag≡square (negsuc n) =
 
 binomial-formula : ∀ a b → (a - b) * (a + b) ≡ a * a - b * b
 binomial-formula a b =
-  (a - b) * (a + b)                       ≡⟨ sym (*-distribʳ-+ (a + b) a (- b)) ⟩
-  a * (a + b) + (- b) * (a + b)           ≡[ i ]⟨ *-distribˡ-+ a a b (~ i) + *-distribˡ-+ (- b) a b (~ i) ⟩
+  (a - b) * (a + b)                       ≡⟨ *-distribʳ-+ (a + b) a (- b) ⟩
+  a * (a + b) + (- b) * (a + b)           ≡[ i ]⟨ *-distribˡ-+ a a b i + *-distribˡ-+ (- b) a b i ⟩
   (a * a + a * b) + (- b * a + - b * b)   ≡[ i ]⟨ (a * a + *-comm a b i) + (neg* b a (~ i) + neg* b b (~ i)) ⟩
   (a * a + b * a) + (- (b * a) - (b * b)) ≡[ i ]⟨ +-assoc (a * a + b * a) (- (b * a)) (- (b * b)) i ⟩
   (a * a + b * a) - b * a - b * b         ≡[ i ]⟨ +-assoc (a * a) (b * a) (- (b * a)) (~ i) - b * b ⟩
@@ -697,14 +699,13 @@ binomial-formula a b =
 ab≡0⇒a≡0∨b≡0 : ∀ a b → a * b ≡ pos 0 → (a ≡ pos 0) ⊎ (b ≡ pos 0)
 ab≡0⇒a≡0∨b≡0 (pos zero) b _ = inl refl
 ab≡0⇒a≡0∨b≡0 (pos (suc n)) (pos zero) _ = inr refl
-ab≡0⇒a≡0∨b≡0 (pos (suc n)) (pos (suc m)) ab≡0 = ⊥-elim {!!}
-ab≡0⇒a≡0∨b≡0 (pos (suc n)) (negsuc m) ab≡0 = ⊥-elim {!!}
+ab≡0⇒a≡0∨b≡0 (pos (suc n)) (pos (suc m)) ab≡0 = ⊥-elim (NatH.snotz (injPos ab≡0))
+ab≡0⇒a≡0∨b≡0 (pos (suc n)) (negsuc m) ab≡0 = ⊥-elim (negsucNotpos _ _ ab≡0)
 ab≡0⇒a≡0∨b≡0 (negsuc n) (pos zero) _ = inr refl
-ab≡0⇒a≡0∨b≡0 (negsuc n) (pos (suc m)) ab≡0 = ⊥-elim {!!}
-ab≡0⇒a≡0∨b≡0 (negsuc n) (negsuc m) ab≡0 = ⊥-elim {!!}
+ab≡0⇒a≡0∨b≡0 (negsuc n) (pos (suc m)) ab≡0 = ⊥-elim (negsucNotpos _ _ ab≡0)
+ab≡0⇒a≡0∨b≡0 (negsuc n) (negsuc m) ab≡0 = ⊥-elim (NatH.snotz (injPos ab≡0))
 
 ¬a≡0∧¬b≡0⇒¬ab≡0 : ∀ {a b} → ¬ (a ≡ pos 0) → ¬ (b ≡ pos 0) → ¬ a * b ≡ pos 0
 ¬a≡0∧¬b≡0⇒¬ab≡0 {a = a} {b} ¬a≡0 ¬b≡0 ab≡0 with ab≡0⇒a≡0∨b≡0 a b ab≡0
 ...                             | inl a≡0 = ¬a≡0 a≡0
 ...                             | inr b≡0 = ¬b≡0 b≡0
--}
